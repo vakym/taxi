@@ -85,17 +85,17 @@ namespace Ddd.Taxi.Domain
 
     public static class PersonNameExtensions
     {
-        public static string ToString(this PersonName person, string format)
+        public static string GetFullName(this PersonName person)
         {
-            return format.Replace("F", person.FirstName).Replace("L", person.LastName);
+            return $"{person.FirstName} {person.LastName}";
         }
     }
 
     public static class AdressExtensions
     {
-        public static string ToString(this Address adress, string format)
+        public static string GetFullAdress(this Address adress)
         {
-            return format.Replace("S", adress.Street).Replace("B", adress.Building);
+            return $"{adress.Street} {adress.Building}";
         }
     }
 
@@ -155,7 +155,7 @@ namespace Ddd.Taxi.Domain
                                                              Address startAdress,
                                                              Func<DateTime> currentTime)
         {
-            time = currentTime;//для прохождения тестов. Чтобы соподало время
+            time = currentTime;//для прохождения тестов. Чтобы совпадало время
             return new TaxiOrder(0,
                                  currentTime(),
                                  TaxiOrderStatus.WaitingForDriver,
@@ -178,9 +178,8 @@ namespace Ddd.Taxi.Domain
             if (!IsDriverAssign)
                 throw new InvalidOperationException("The order must be in WaitingForDriver status." +
                     "Have no assigned driver for unassign.");
-            if (Status > TaxiOrderStatus.WaitingCarArrival)
-                throw new InvalidOperationException($"Can not unassign driver. "
-                                                    + $"Order status is {Status} status");
+            ThrowIfIncorrectStatus(s => s > TaxiOrderStatus.WaitingCarArrival,
+                                  $"Can not unassign driver. Order status is {Status} status");
             Driver = null;
             Status = TaxiOrderStatus.WaitingForDriver;
         }
@@ -193,8 +192,8 @@ namespace Ddd.Taxi.Domain
 
         public void Cancel()
         {
-            if (Status > TaxiOrderStatus.WaitingCarArrival)
-                throw new InvalidOperationException($"Can not cancel order in {Status} status");
+            ThrowIfIncorrectStatus(s => s > TaxiOrderStatus.WaitingCarArrival,
+                                   $"Can not cancel order in {Status} status");
             if (IsDriverAssign)
                 UnassignDriver();
             Status = TaxiOrderStatus.Canceled;
@@ -203,16 +202,16 @@ namespace Ddd.Taxi.Domain
 
         public void StartRide()
         {
-            if (Status != TaxiOrderStatus.WaitingCarArrival)
-                throw new InvalidOperationException("Can not start ride without assigned driver");
+            ThrowIfIncorrectStatus(s => s != TaxiOrderStatus.WaitingCarArrival, 
+                                   "Can not start ride without assigned driver");
             Status = TaxiOrderStatus.InProgress;
             StartRideTime = time();
         }
 
         public void FinishRide()
         {
-            if (Status != TaxiOrderStatus.InProgress)
-                throw new InvalidOperationException("The ride must be in progress");
+            ThrowIfIncorrectStatus(s => s != TaxiOrderStatus.InProgress,
+                                   "The ride must be in progress");
             Status = TaxiOrderStatus.Finished;
             FinishRideTime = time();
         }
@@ -225,14 +224,20 @@ namespace Ddd.Taxi.Domain
         public string GetShortOrderInfo()
         {
             return string.Join(" ",
-              "OrderId: " + Id,
-              "Status: " + Status,
-              "Client: " + ClientName.ToString("F L"),
-              "Driver: " + Driver?.Name.ToString("F L") ?? "not assigned",
-              "From: " + Start.ToString("S B"),
-              "To: " + Destination?.ToString("S B") ?? "unspecified",
-              "LastProgressTime: " + GetLastProgressTime().ToString("yyyy-MM-dd HH:mm:ss",
+              $"OrderId: {Id}",
+              $"Status: {Status}",
+              $"Client: {ClientName.GetFullName()}",
+              $"Driver: {Driver?.Name.GetFullName()}",
+              $"From: {Start.GetFullAdress()}",
+              $"To: {Destination?.GetFullAdress()}",
+              $"LastProgressTime: " + GetLastProgressTime().ToString("yyyy-MM-dd HH:mm:ss",
                                                                     CultureInfo.InvariantCulture));
+        }
+
+        private void ThrowIfIncorrectStatus(Func<TaxiOrderStatus,bool> exceptionCondition ,string errorMessage)
+        {
+            if (exceptionCondition(Status))
+                throw new InvalidOperationException(errorMessage);
         }
 
         private DateTime GetLastProgressTime()
@@ -244,7 +249,6 @@ namespace Ddd.Taxi.Domain
             if (Status == TaxiOrderStatus.Canceled) return CancelTime;
             throw new NotSupportedException(Status.ToString());
         }
-
         private static int idCounter;
         private static Func<DateTime> time;
         private static int GenerateUniqueId()
@@ -267,7 +271,7 @@ namespace Ddd.Taxi.Domain
 
         public string GetDriverFullInfo()
         {
-            return $"{nameof(Id)}: {Id} DriverName: {Name.ToString("F L")} {Car.ToString()}";
+            return $"{nameof(Id)}: {Id} DriverName: {Name.GetFullName()} {Car.ToString()}";
         }
     }
 
